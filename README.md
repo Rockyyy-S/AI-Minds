@@ -1,4 +1,4 @@
-# 网页问答自动化工作流
+# AI网页问答自动化工作流
 
 这套工作流是把“打开网页聊天工具 -> 输入提示词 -> 等待回答 -> 提取结果 -> 写入 Markdown 文件”做成可重复执行的命令行工具。
 
@@ -87,22 +87,22 @@ npm install
 
 `sites` 里的每一项也可以直接写成字符串站点 id，例如 `["kimi", "deepseek"]`；配置字段 `authFile` 也兼容 `auth_file` / `authPath` / `auth_path`。
 
-### 初始化 Kimi 登录态
+### 初始化单个站点登录态
 
 ```bash
 npm run setup:kimi
-```
-
-### 初始化 DeepSeek 登录态
-
-```bash
 npm run setup:deepseek
-```
-
-### 初始化 Z.ai
-
-```bash
 npm run setup:zai
+npm run setup:qwen
+npm run setup:doubao
+npm run setup:metaso
+npm run setup:yiyan
+npm run setup:yuanbao
+npm run setup:manus
+npm run setup:grok
+npm run setup:chatgpt
+npm run setup:gemini
+npm run setup:perplexity
 ```
 
 `Z.ai` 普通聊天可以免登录，但高级搜索会跳转登录页。由于脚本会在提问前确保高级搜索开启，所以建议先运行这个命令完成登录/验证。
@@ -121,21 +121,6 @@ npm run setup:gemini -- --force-setup
 npm run setup:perplexity -- --force-setup
 ```
 
-其他新增站点也都补了快捷命令：
-
-```bash
-npm run setup:qwen
-npm run setup:doubao
-npm run setup:metaso
-npm run setup:yiyan
-npm run setup:yuanbao
-npm run setup:manus
-npm run setup:grok
-npm run setup:chatgpt
-npm run setup:gemini
-npm run setup:perplexity
-```
-
 如果你想按配置文件对所有已启用站点统一强制 setup，也可以这样传参数：
 
 ```bash
@@ -152,27 +137,12 @@ npm run setup:all
 
 如果你第一次接入 `腾讯元宝 / Grok / ChatGPT / Gemini / Perplexity`，建议先单独看一下对应站点在你当前网络环境里是否会触发登录或安全验证，再决定是否直接放进 `ask:all / batch:all`。
 
-### 单次提问
+### 单站点单次提问
 
 ```bash
 npm run ask:kimi -- --prompt "我想做一个俄罗斯方块游戏，请给出具体落地方案" --output output/kimi/tetris-plan.md
-```
-
-### DeepSeek 单次提问
-
-```bash
 npm run ask:deepseek -- --prompt "我想做一个俄罗斯方块游戏，请给出具体落地方案" --output output/deepseek/tetris-plan.md
-```
-
-### Z.ai 单次提问
-
-```bash
 npm run ask:zai -- --prompt "我想做一个俄罗斯方块游戏，请给出具体落地方案" --output output/zai/tetris-plan.md
-```
-
-其他新增站点的单次命令也已提供：
-
-```bash
 npm run ask:qwen -- --prompt "你好" --output output/qwen/hello.md
 npm run ask:doubao -- --prompt "你好" --output output/doubao/hello.md
 npm run ask:metaso -- --prompt "你好" --output output/metaso/hello.md
@@ -207,35 +177,16 @@ node scripts/web-chat-workflow.mjs run --site kimi,deepseek --prompt "你好" --
 
 ```bash
 npm run ask:kimi -- --prompt-file prompts/初步方案提示词.md --output output/kimi/初步方案.md
-```
-
-### DeepSeek 从提示词文件提问
-
-```bash
 npm run ask:deepseek -- --prompt-file prompts/初步方案提示词.md --output output/deepseek/初步方案.md
+npm run ask:zai -- --prompt-file prompts/初步方案提示词.md --output output/zai/初步方案.md
 ```
 
-### 批量执行
+### 单站点批量执行
 
 ```bash
 npm run batch:kimi
-```
-
-DeepSeek 批量执行：
-
-```bash
 npm run batch:deepseek
-```
-
-Z.ai 批量执行：
-
-```bash
 npm run batch:zai
-```
-
-其他新增站点也提供了批量命令：
-
-```bash
 npm run batch:qwen
 npm run batch:doubao
 npm run batch:metaso
@@ -258,12 +209,8 @@ npm run batch:all
 
 ```bash
 node scripts/web-chat-workflow.mjs batch --site kimi --tasks tasks/kimi-tasks.example.json
-```
-
-DeepSeek 也可以直接用：
-
-```bash
 node scripts/web-chat-workflow.mjs batch --site deepseek --tasks tasks/deepseek-tasks.example.json
+node scripts/web-chat-workflow.mjs batch --site zai --tasks tasks/kimi-tasks.example.json
 ```
 
 多站点批量任务示例见 [tasks/multi-site-tasks.example.json](tasks/multi-site-tasks.example.json)：
