@@ -1,0 +1,11 @@
+{
+  "tasks": [
+    {
+      "name": "nihao",
+      "prompt": "你好",
+      "output": "output/deepseek/nihao.md",
+      "retries": 1,
+      "timestamp": true
+    }
+  ]
+}

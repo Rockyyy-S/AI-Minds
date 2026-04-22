@@ -1,0 +1,11 @@
+{
+  "tasks": [
+    {
+      "name": "profile",
+      "prompt": "介绍下中国历史",
+      "output": "output/{site}/china-history.md",
+      "retries": 1,
+      "timestamp": true
+    }
+  ]
+}

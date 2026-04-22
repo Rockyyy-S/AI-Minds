@@ -1,0 +1,3 @@
+name,prompt,promptFile,output,retries,timestamp
+贪吃蛇落地方案,"我想做一个贪吃蛇游戏，请给出具体落地方案",,output/kimi/snake-plan.md,1,false
+中国历史介绍,,prompts/介绍中国历史.md,output/kimi/中国历史.md,1,false

@@ -1,0 +1,10 @@
+{
+  "tasks": [
+    {
+      "name": "中国历史介绍",
+      "prompt": "介绍中国历史",
+      "output": "output/kimi/中国历史.md",
+      "timestamp": false
+    }
+  ]
+}

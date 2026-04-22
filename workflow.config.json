@@ -1,0 +1,56 @@
+{
+  "sites": [
+    {
+      "id": "kimi",
+      "enabled": true
+    },
+    {
+      "id": "deepseek",
+      "enabled": true
+    },
+    {
+      "id": "zai",
+      "enabled": true
+    },
+    {
+      "id": "qwen",
+      "enabled": true
+    },
+    {
+      "id": "doubao",
+      "enabled": true
+    },
+    {
+      "id": "metaso",
+      "enabled": true
+    },
+    {
+      "id": "yiyan",
+      "enabled": true
+    },
+    {
+      "id": "yuanbao",
+      "enabled": true
+    },
+    {
+      "id": "manus",
+      "enabled": true
+    },
+    {
+      "id": "chatgpt",
+      "enabled": true
+    },
+    {
+      "id": "gemini",
+      "enabled": true
+    },
+    {
+      "id": "grok",
+      "enabled": false
+    },
+    {
+      "id": "perplexity",
+      "enabled": false
+    }
+  ]
+}
