@@ -1,8 +1,9 @@
 {
+  "outputDir": "E:\\0学习\\实践项目\\idea2money\\‌think-twice\\aiminds",
   "sites": [
     {
       "id": "kimi",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "deepseek",
@@ -14,7 +15,7 @@
     },
     {
       "id": "qwen",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "doubao",
@@ -22,11 +23,11 @@
     },
     {
       "id": "metaso",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "yiyan",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "yuanbao",

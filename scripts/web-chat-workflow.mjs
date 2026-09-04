@@ -40,6 +40,7 @@ const DEFAULT_SETTLE_INTERVAL_MS = 2000;
 const DEFAULT_SETTLE_ROUNDS = 3;
 const DEFAULT_RETRIES = 1;
 const DEFAULT_CONFIG_FILE = "workflow.config.json";
+const ECHOED_PROMPT_ERROR_CODE = "ECHOED_PROMPT";
 
 function printUsage() {
   console.log(
@@ -51,14 +52,14 @@ function printUsage() {
   node scripts/web-chat-workflow.mjs setup --site chatgpt
   node scripts/web-chat-workflow.mjs setup --site qwen --force-setup
   node scripts/web-chat-workflow.mjs setup --config workflow.config.json
-  node scripts/web-chat-workflow.mjs run --site kimi --prompt "问题" --output output/kimi.md
-  node scripts/web-chat-workflow.mjs run --site deepseek --prompt "问题" --output output/deepseek.md
-  node scripts/web-chat-workflow.mjs run --site zai --prompt "问题" --output output/zai.md
-  node scripts/web-chat-workflow.mjs run --site chatgpt --prompt "问题" --output output/chatgpt.md
-  node scripts/web-chat-workflow.mjs run --site kimi,deepseek --prompt "问题" --output output/{site}.md
-  node scripts/web-chat-workflow.mjs run --config workflow.config.json --prompt "问题" --output output/{site}.md
-  node scripts/web-chat-workflow.mjs run --site kimi --prompt-file prompts/初步方案提示词.md --output output/answer.md
-  node scripts/web-chat-workflow.mjs run --site deepseek --prompt-file prompts/初步方案提示词.md --output output/answer.md
+  node scripts/web-chat-workflow.mjs run --site kimi --prompt "问题" --output-file answer.md
+  node scripts/web-chat-workflow.mjs run --site deepseek --prompt "问题" --output-file answer.md
+  node scripts/web-chat-workflow.mjs run --site zai --prompt "问题" --output-file answer.md
+  node scripts/web-chat-workflow.mjs run --site chatgpt --prompt "问题" --output-file answer.md
+  node scripts/web-chat-workflow.mjs run --site kimi,deepseek --prompt "问题" --output-file answer.md
+  node scripts/web-chat-workflow.mjs run --config workflow.config.json --prompt "问题" --output-file answer.md
+  node scripts/web-chat-workflow.mjs run --site kimi --prompt "请先阅读补充材料" --prompt-file prompts/初步方案提示词.md --output-file answer.md
+  node scripts/web-chat-workflow.mjs run --site deepseek --prompt "请先阅读补充材料" --prompt-file prompts/初步方案提示词.md --output-file answer.md
   node scripts/web-chat-workflow.mjs batch --site kimi --tasks tasks/kimi-tasks.example.json
   node scripts/web-chat-workflow.mjs batch --site deepseek --tasks tasks/deepseek-tasks.example.json
   node scripts/web-chat-workflow.mjs batch --config workflow.config.json --tasks tasks/multi-site-tasks.example.json
@@ -71,8 +72,8 @@ function printUsage() {
   --config workflow.config.json  未传 --site 时会自动尝试读取当前目录下的 workflow.config.json
   --prompt "直接传入提示词"
   --prompt-file prompts/example.md
-  --output output/result.md
-  --output output/{site}/result.md
+  --output-file result.md
+  --output-dir output
   --tasks tasks/kimi-tasks.example.json
   --auth-file .auth/kimi.json
   --force-setup  对免登录站点也强制打开浏览器并保存登录态
@@ -86,9 +87,10 @@ function printUsage() {
 
 批量任务支持字段:
   name / title / taskname / 名称 / 任务名
-  prompt / question / message / text / 提示词 / 问题 / 提问内容
-  promptFile / prompt_file / prompt_path / 提示词文件 / 提示词路径
-  output / outfile / outputpath / 输出 / 输出文件 / 输出路径
+  prompt / question / message / text / 提示词 / 问题 / 提问内容（必填）
+  promptFile / prompt_file / prompt_path / 提示词文件 / 提示词路径（可选，内容会追加到 prompt 后）
+  outputFile / output_file / file / output / outfile / outputpath / 输出文件名 / 输出文件 / 输出
+  outputDir / output_dir / 输出目录 / 输出根目录（可选，任务级覆盖）
   retries / retry / 重试次数 / 重试
   timestamp / timestampOutput / timestamp_output / 时间戳 / 加时间戳
 `.trim()
@@ -265,7 +267,19 @@ function normalizeTask(rawTask, index) {
       "提示词文件",
       "提示词路径"
     ]),
-    output: pickFirstDefined(rawTask, ["output", "outfile", "outputpath", "输出", "输出文件", "输出路径"]),
+    outputFile: pickFirstDefined(rawTask, [
+      "outputFile",
+      "outputfile",
+      "output_file",
+      "file",
+      "output",
+      "outfile",
+      "outputpath",
+      "输出文件名",
+      "输出文件",
+      "输出"
+    ]),
+    outputDir: pickFirstDefined(rawTask, ["outputDir", "outputdir", "output_dir", "输出目录", "输出根目录"]),
     timestamp: parseOptionalBoolean(
       pickFirstDefined(rawTask, ["timestamp", "timestampoutput", "timestamp_output", "时间戳", "加时间戳"])
     ),
@@ -275,12 +289,32 @@ function normalizeTask(rawTask, index) {
     )
   };
 
-  if (!task.prompt && !task.promptFile) {
-    throw new Error(`第 ${index + 1} 个任务缺少 prompt 或 promptFile`);
+  if (typeof task.prompt === "string") {
+    task.prompt = task.prompt.trim();
   }
 
-  if (!task.output) {
-    throw new Error(`第 ${index + 1} 个任务缺少 output`);
+  if (typeof task.promptFile === "string") {
+    task.promptFile = task.promptFile.trim();
+  }
+
+  if (!task.prompt) {
+    throw new Error(`第 ${index + 1} 个任务缺少 prompt（prompt 为必填）`);
+  }
+
+  if (typeof task.outputFile === "string") {
+    task.outputFile = task.outputFile.trim();
+  }
+
+  if (typeof task.outputDir === "string") {
+    task.outputDir = task.outputDir.trim();
+  }
+
+  if (!task.outputFile) {
+    throw new Error(`第 ${index + 1} 个任务缺少 outputFile`);
+  }
+
+  if (path.isAbsolute(task.outputFile) || task.outputFile.includes("/") || task.outputFile.includes("\\")) {
+    throw new Error(`第 ${index + 1} 个任务的 outputFile 只能是文件名，不能包含路径：${task.outputFile}`);
   }
 
   return task;
@@ -469,6 +503,15 @@ function normalizeConfigSite(rawSite, index) {
   };
 }
 
+function normalizeOptionalPathValue(value) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  const normalized = String(value).trim();
+  return normalized || undefined;
+}
+
 async function loadWorkflowConfig(options, { allowDefault = true } = {}) {
   let configPath = options.config ? resolvePath(options.config) : null;
 
@@ -504,8 +547,23 @@ async function loadWorkflowConfig(options, { allowDefault = true } = {}) {
   return {
     path: configPath,
     sites,
-    enabledSites
+    enabledSites,
+    outputDir: normalizeOptionalPathValue(
+      pickFirstDefined(parsed, ["outputDir", "outputdir", "output_dir", "输出目录", "输出根目录"])
+    )
   };
+}
+
+function mergeWorkflowDefaults(options, workflowConfig) {
+  const merged = { ...options };
+  const outputDir =
+    normalizeOptionalPathValue(merged["output-dir"]) ??
+    normalizeOptionalPathValue(merged.outputDir) ??
+    normalizeOptionalPathValue(workflowConfig?.outputDir) ??
+    "output";
+  merged["output-dir"] = outputDir;
+
+  return merged;
 }
 
 async function resolveSitePlans(options, { allowEmpty = false } = {}) {
@@ -552,52 +610,58 @@ function resolveRunTimestamp(options) {
   return options["timestamp-value"] || formatTimestamp();
 }
 
-function applySiteOutputPath(outputPath, siteContext = {}) {
-  const siteId = siteContext.siteId;
-  if (!siteId) {
-    return outputPath;
-  }
-
-  if (outputPath.includes("{site}")) {
-    return outputPath.replaceAll("{site}", siteId);
-  }
-
-  if (!siteContext.isMultiSite) {
-    return outputPath;
-  }
-
-  const parsed = path.parse(outputPath);
-  return path.join(parsed.dir, `${parsed.name}-${siteId}${parsed.ext}`);
-}
-
 function resolveOutputPath(task, options, runTimestamp, siteContext = {}) {
-  let outputPath = applySiteOutputPath(String(task.output), siteContext);
+  let outputFile = String(task.outputFile);
   const timestampEnabled = parseOptionalBoolean(task.timestamp) ?? parseOptionalBoolean(options["timestamp-output"]) ?? false;
 
-  if (outputPath.includes("{timestamp}")) {
-    return outputPath.replaceAll("{timestamp}", runTimestamp);
+  if (outputFile.includes("{timestamp}")) {
+    outputFile = outputFile.replaceAll("{timestamp}", runTimestamp);
   }
 
-  if (!timestampEnabled) {
-    return outputPath;
+  if (timestampEnabled) {
+    const parsed = path.parse(outputFile);
+    outputFile = `${parsed.name}-${runTimestamp}${parsed.ext}`;
   }
 
-  const parsed = path.parse(outputPath);
-  return path.join(parsed.dir, `${parsed.name}-${runTimestamp}${parsed.ext}`);
+  const outputDir =
+    normalizeOptionalPathValue(task.outputDir) || normalizeOptionalPathValue(options["output-dir"]) || "output";
+  const siteSegment = siteContext.siteId || "{site}";
+  return path.join(outputDir, siteSegment, outputFile);
 }
 
 async function readPrompt(task) {
-  if (task.prompt) {
-    return String(task.prompt).trim();
+  const promptText = String(task.prompt || "").trim();
+  if (!promptText) {
+    throw new Error("任务缺少 prompt（prompt 为必填）");
+  }
+
+  if (!task.promptFile) {
+    return promptText;
+  }
+
+  const promptPath = resolvePath(task.promptFile);
+  const content = (await fs.readFile(promptPath, "utf8")).trim();
+  if (!content) {
+    return promptText;
+  }
+
+  return `${promptText}\n\n${content}`;
+}
+
+function getTaskPromptSource(task) {
+  if (task.prompt && task.promptFile) {
+    return `prompt+promptFile:${task.promptFile}`;
   }
 
   if (task.promptFile) {
-    const promptPath = resolvePath(task.promptFile);
-    const content = await fs.readFile(promptPath, "utf8");
-    return content.trim();
+    return `promptFile:${task.promptFile}`;
   }
 
-  throw new Error("任务缺少 prompt 或 promptFile");
+  if (task.prompt) {
+    return "prompt";
+  }
+
+  return "prompt(缺失)";
 }
 
 async function writeMarkdown(outputPath, markdown) {
@@ -704,6 +768,34 @@ async function promptForEnter(message) {
   rl.close();
 }
 
+function normalizeForEchoComparison(text) {
+  return String(text || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function ensureResponseNotEchoPrompt({ promptText, markdown, site }) {
+  if (!site?.rejectEchoedPrompt) {
+    return;
+  }
+
+  const normalizedPrompt = normalizeForEchoComparison(promptText);
+  const normalizedMarkdown = normalizeForEchoComparison(markdown);
+
+  if (normalizedPrompt && normalizedMarkdown && normalizedPrompt === normalizedMarkdown) {
+    const error = new Error(`${site.label} 提取结果与 prompt 完全一致，判定为异常抓取，已触发重试。`);
+    error.code = ECHOED_PROMPT_ERROR_CODE;
+    throw error;
+  }
+}
+
+function isEchoedPromptError(error) {
+  return Boolean(error && error.code === ECHOED_PROMPT_ERROR_CODE);
+}
+
 async function runSingleTask({ page, site, task, options, runTimestamp, siteContext }) {
   const promptText = await readPrompt(task);
   const outputPath = resolveOutputPath(task, options, runTimestamp, siteContext);
@@ -733,6 +825,8 @@ async function runSingleTask({ page, site, task, options, runTimestamp, siteCont
     settleRounds: options["settle-rounds"] || DEFAULT_SETTLE_ROUNDS
   });
 
+  ensureResponseNotEchoPrompt({ promptText, markdown, site });
+
   const savedPath = await writeMarkdown(outputPath, markdown);
   console.log(`[${site.label}] 已写入 ${savedPath}`);
   return savedPath;
@@ -754,12 +848,17 @@ async function executeTaskWithRetry({ context, site, task, options, runTimestamp
       return await runSingleTask({ page, site, task, options, runTimestamp, siteContext });
     } catch (error) {
       lastError = error;
+
+      if (isEchoedPromptError(error)) {
+        console.error(`[${site.label}] 命中回显保护：提取结果与 prompt 一致，按失败处理并重试。`);
+      }
+
       const artifacts = await captureFailureArtifacts(page, `${site.id}-task-${taskIndex + 1}-attempt-${attempt}`, {
         taskIndex: taskIndex + 1,
         taskName: task.name || null,
         attempt,
         totalAttempts,
-        output: task.output,
+        outputFile: task.outputFile,
         siteId: site.id
       });
       const artifactMessage = formatArtifactsMessage(artifacts);
@@ -827,7 +926,7 @@ async function runWorkflow(sitePlan, options, siteContext) {
       {
         prompt: options.prompt,
         promptFile: options["prompt-file"],
-        output: options.output,
+        outputFile: options["output-file"] ?? options.file ?? options.output,
         retries: options.retries,
         timestamp: options["timestamp-output"]
       },
@@ -893,6 +992,7 @@ async function runValidate(options) {
   const tasks = await loadBatchTasks(options.tasks);
   const runTimestamp = resolveRunTimestamp(options);
   const { workflowConfig, sitePlans } = await resolveSitePlans(options, { allowEmpty: true });
+  const effectiveOptions = mergeWorkflowDefaults(options, workflowConfig);
 
   console.log(`任务文件校验通过：${resolvePath(options.tasks)}`);
   console.log(`任务数量：${tasks.length}`);
@@ -903,8 +1003,8 @@ async function runValidate(options) {
 
   if (!sitePlans.length) {
     tasks.forEach((task, index) => {
-      const outputPath = resolveOutputPath(task, options, runTimestamp);
-      const source = task.prompt ? "prompt" : `promptFile:${task.promptFile}`;
+      const outputPath = resolveOutputPath(task, effectiveOptions, runTimestamp);
+      const source = getTaskPromptSource(task);
       const name = task.name ? ` ${task.name}` : "";
       console.log(`${index + 1}.${name} -> ${outputPath} (${source})`);
     });
@@ -914,11 +1014,11 @@ async function runValidate(options) {
   for (const sitePlan of sitePlans) {
     console.log(`\n[${sitePlan.site.label}]`);
     tasks.forEach((task, index) => {
-      const outputPath = resolveOutputPath(task, options, runTimestamp, {
+      const outputPath = resolveOutputPath(task, effectiveOptions, runTimestamp, {
         siteId: sitePlan.site.id,
         isMultiSite: sitePlans.length > 1
       });
-      const source = task.prompt ? "prompt" : `promptFile:${task.promptFile}`;
+      const source = getTaskPromptSource(task);
       const name = task.name ? ` ${task.name}` : "";
       console.log(`${index + 1}.${name} -> ${outputPath} (${source})`);
     });
@@ -987,13 +1087,16 @@ async function main() {
   }
 
   const { workflowConfig, sitePlans } = await resolveSitePlans(options);
+  const effectiveOptions = mergeWorkflowDefaults(options, workflowConfig);
 
   if (workflowConfig && !options.site) {
     console.log(`使用站点配置：${workflowConfig.path}`);
   }
 
+  console.log(`输出目录：${effectiveOptions["output-dir"]}`);
+
   console.log(`目标站点：${formatSiteLabels(sitePlans)}`);
-  await runCommandForSites(command, sitePlans, options);
+  await runCommandForSites(command, sitePlans, effectiveOptions);
 }
 
 main().catch((error) => {

@@ -9,7 +9,7 @@ const SEARCH_BUTTON_SELECTOR = "button.flex.items-center.text-sm";
 const THINK_BUTTON_SELECTOR = "button[data-autothink]";
 const MODEL_SELECTOR = ".modelSelectorButton, button[aria-label*='模型']";
 const CURRENT_MODEL_SELECTOR = ".modelSelectorButton";
-const DEFAULT_TIMEOUT_MS = 180000;
+const DEFAULT_TIMEOUT_MS = 300000;
 const DEFAULT_SETTLE_INTERVAL_MS = 2000;
 const DEFAULT_SETTLE_ROUNDS = 3;
 let preferTurboModel = false;
@@ -219,16 +219,20 @@ export const zaiSite = {
     const timeoutMs = Number(options.timeoutMs || DEFAULT_TIMEOUT_MS);
     const settleIntervalMs = Number(options.settleIntervalMs || DEFAULT_SETTLE_INTERVAL_MS);
     const settleRounds = Math.max(Number(options.settleRounds || DEFAULT_SETTLE_ROUNDS), 3);
+    // 降级：即使停止按钮仍可见，文本稳定更多轮后也视为完成（防止停止按钮卡住）
+    const fallbackSettleRounds = settleRounds * 3;
     const minLength = Number(options.minLength || 1);
     const beforeText = String(baselineState?.text || "");
     const startedAt = Date.now();
     let previous = "";
     let stableRounds = 0;
+    let stableWhileGeneratingRounds = 0;
 
     while (Date.now() - startedAt < timeoutMs) {
       if (await switchPeakDialogToTurbo(page, 3000)) {
         previous = "";
         stableRounds = 0;
+        stableWhileGeneratingRounds = 0;
         continue;
       }
 
@@ -238,6 +242,7 @@ export const zaiSite = {
         if (await switchPeakDialogToTurbo(page, 3000)) {
           previous = "";
           stableRounds = 0;
+          stableWhileGeneratingRounds = 0;
           continue;
         }
         preferTurboModel = true;
@@ -247,15 +252,22 @@ export const zaiSite = {
       const current = state.text;
       const hasNewAnswer = current.length >= minLength && current !== beforeText;
 
-      if (!state.isGenerating && hasNewAnswer && current === previous) {
-        stableRounds += 1;
+      if (hasNewAnswer && current === previous) {
+        if (!state.isGenerating) {
+          stableRounds += 1;
+          stableWhileGeneratingRounds = 0;
+        } else {
+          stableWhileGeneratingRounds += 1;
+          stableRounds = 0;
+        }
       } else {
         stableRounds = 0;
+        stableWhileGeneratingRounds = 0;
       }
 
       previous = current;
 
-      if (stableRounds >= settleRounds) {
+      if (stableRounds >= settleRounds || stableWhileGeneratingRounds >= fallbackSettleRounds) {
         return `${current.trim()}\n`;
       }
 

@@ -26,8 +26,23 @@ function shortTimeout(timeoutMs, fallbackMs = 10000) {
 }
 
 function buildMarkdownExtractor(selector) {
-  return (responseSelector) => {
-    const mdRoot = Array.from(document.querySelectorAll(responseSelector)).at(-1);
+  return (input, excludedText = "") => {
+    const responseSelector =
+      typeof input === "string" ? input : String(input?.responseSelector || selector || "");
+    const normalizedExcluded = String(
+      typeof input === "string" ? excludedText : input?.excludedText || ""
+    ).trim();
+    const nodes = Array.from(document.querySelectorAll(responseSelector)).filter(
+      (node) => !node.closest(".ds-think-content")
+    );
+    const mdRoot =
+      nodes
+        .slice()
+        .reverse()
+        .find((node) => {
+          const text = String(node.innerText || "").trim();
+          return text && text !== normalizedExcluded;
+        }) || null;
     if (!mdRoot) {
       return "";
     }
@@ -203,6 +218,7 @@ export const deepseekSite = {
   id: "deepseek",
   label: "DeepSeek",
   baseUrl: "https://chat.deepseek.com/",
+  rejectEchoedPrompt: true,
   selectors: {
     composer: "textarea[placeholder*='DeepSeek']",
     assistantMarkdown: ".ds-message .ds-markdown",
@@ -243,6 +259,7 @@ export const deepseekSite = {
       .catch(() => {});
   },
   async openFreshChat(page) {
+    this.lastSubmittedPrompt = "";
     await this.applyPreferenceStorage(page);
     await page.goto(this.baseUrl, { waitUntil: "domcontentloaded" });
   },
@@ -258,7 +275,9 @@ export const deepseekSite = {
   },
   async captureAnswerState(page) {
     return page.evaluate((responseSelector) => {
-      const items = Array.from(document.querySelectorAll(responseSelector));
+      const items = Array.from(document.querySelectorAll(responseSelector)).filter(
+        (node) => !node.closest(".ds-think-content")
+      );
       const latest = items.at(-1);
       return {
         count: items.length,
@@ -393,6 +412,7 @@ export const deepseekSite = {
     return { model };
   },
   async submitPrompt(page, prompt) {
+    this.lastSubmittedPrompt = String(prompt || "").trim();
     await dismissCommonOverlays(page, { timeoutMs: shortTimeout(DEFAULT_TIMEOUT_MS, 3000) });
     const composer = page.locator(this.selectors.composer).first();
     await composer.waitFor({ state: "visible", timeout: DEFAULT_TIMEOUT_MS });
@@ -405,8 +425,10 @@ export const deepseekSite = {
     const timeoutMs = Number(options.timeoutMs || DEFAULT_TIMEOUT_MS);
     const settleIntervalMs = Number(options.settleIntervalMs || DEFAULT_SETTLE_INTERVAL_MS);
     const settleRounds = Number(options.settleRounds || DEFAULT_SETTLE_ROUNDS);
+    const fallbackSettleRounds = settleRounds * 3;
     const minLength = Number(options.minLength || 1);
     const selector = this.selectors.assistantMarkdown;
+    const excludedPrompt = String(this.lastSubmittedPrompt || "").trim();
     const normalizedBaseline =
       typeof baselineState === "number"
         ? { count: baselineState, text: "" }
@@ -416,11 +438,14 @@ export const deepseekSite = {
           };
 
     await page.waitForFunction(
-      ({ responseSelector, beforeCount, beforeText, minimumLength }) => {
-        const items = Array.from(document.querySelectorAll(responseSelector));
+      ({ responseSelector, beforeCount, beforeText, minimumLength, excludedText }) => {
+        const items = Array.from(document.querySelectorAll(responseSelector)).filter(
+          (node) => !node.closest(".ds-think-content")
+        );
         const latest = items.at(-1);
-        const text = latest ? latest.innerText.trim() : "";
-        const countChanged = items.length > beforeCount;
+        const rawText = latest ? latest.innerText.trim() : "";
+        const text = rawText === excludedText ? "" : rawText;
+        const countChanged = items.length > beforeCount && text.length >= minimumLength;
         const textChanged = text.length >= minimumLength && text !== beforeText;
         return countChanged || textChanged;
       },
@@ -428,31 +453,77 @@ export const deepseekSite = {
         responseSelector: selector,
         beforeCount: normalizedBaseline.count,
         beforeText: normalizedBaseline.text,
-        minimumLength: minLength
+        minimumLength: minLength,
+        excludedText: excludedPrompt
       },
       { timeout: timeoutMs }
     );
 
     let previous = "";
     let stableRounds = 0;
+    let stableWhileGeneratingRounds = 0;
     const startedAt = Date.now();
 
     while (Date.now() - startedAt < timeoutMs) {
-      const current = await page.evaluate((responseSelector) => {
-        const latest = Array.from(document.querySelectorAll(responseSelector)).at(-1);
-        return latest ? latest.innerText.trim() : "";
-      }, selector);
+      const { current, isGenerating } = await page.evaluate(({ responseSelector, excludedText }) => {
+        const latest = Array.from(document.querySelectorAll(responseSelector))
+          .filter((node) => !node.closest(".ds-think-content"))
+          .at(-1);
+        const isGeneratingNow = Array.from(document.querySelectorAll("button,[role='button'],[aria-label]")).some(
+          (element) => {
+            if (element.getClientRects().length <= 0) {
+              return false;
+            }
+
+            const text = [
+              element.getAttribute("aria-label"),
+              element.getAttribute("title"),
+              element.textContent
+            ]
+              .filter(Boolean)
+              .join(" ");
+
+            return /停止|Stop/i.test(text);
+          }
+        );
+
+        if (!latest) {
+          return {
+            current: "",
+            isGenerating: isGeneratingNow
+          };
+        }
+
+        const text = latest.innerText.trim();
+        return {
+          current: text === excludedText ? "" : text,
+          isGenerating: isGeneratingNow
+        };
+      }, {
+        responseSelector: selector,
+        excludedText: excludedPrompt
+      });
 
       if (current.length >= minLength && current === previous) {
-        stableRounds += 1;
+        if (!isGenerating) {
+          stableRounds += 1;
+          stableWhileGeneratingRounds = 0;
+        } else {
+          stableWhileGeneratingRounds += 1;
+          stableRounds = 0;
+        }
       } else {
         stableRounds = 0;
+        stableWhileGeneratingRounds = 0;
       }
 
       previous = current;
 
-      if (stableRounds >= settleRounds) {
-        const markdown = await page.evaluate(buildMarkdownExtractor(selector), selector);
+      if (stableRounds >= settleRounds || stableWhileGeneratingRounds >= fallbackSettleRounds) {
+        const markdown = await page.evaluate(buildMarkdownExtractor(selector), {
+          responseSelector: selector,
+          excludedText: excludedPrompt
+        });
         if (markdown.trim()) {
           return markdown.trim() + "\n";
         }

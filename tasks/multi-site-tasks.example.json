@@ -1,11 +1,13 @@
 {
   "tasks": [
     {
-      "name": "profile",
-      "prompt": "介绍下中国历史",
-      "output": "output/{site}/china-history.md",
-      "retries": 1,
-      "timestamp": true
+      "name": "三思",
+      "prompt": "我想做一个软件/工具，以下是具体想法，请分析一下商业可行性，技术可行性，市场竞争情况，并给出一个详细的实施方案。",
+      "promptFile": "prompts/三思.md",
+      "outputFile": "三思.md",
+      "retries": 2,
+      "timestamp": true,
+      "outputDir": "E:\\0学习\\实践项目\\idea2money\\‌think-twice\\aiminds"
     }
   ]
 }

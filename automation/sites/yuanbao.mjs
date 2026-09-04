@@ -1,5 +1,6 @@
 import {
   DEFAULT_TIMEOUT_MS,
+  clickTextOption,
   createSimpleChatSite,
   dismissCommonOverlays,
   selectPreferredOption,
@@ -76,6 +77,54 @@ async function ensureYuanbaoToggle(page, label, selector, activePattern, timeout
   return true;
 }
 
+async function isYuanbaoInternetSearchLikelyEnabled(page) {
+  return page
+    .evaluate(() => {
+      const byClass = Array.from(document.querySelectorAll(".yb-internet-search-btn,[class*='internet-search']")).some(
+        (element) => /active|selected/i.test(String(element.className || ""))
+      );
+
+      if (byClass) {
+        return true;
+      }
+
+      return Boolean(document.querySelector("[data-item-report-now-internet-search-status='3']"));
+    })
+    .catch(() => false);
+}
+
+async function ensureYuanbaoInternetSearch(page, timeoutMs) {
+  try {
+    await ensureYuanbaoToggle(page, "联网搜索", ".yb-internet-search-btn,[class*='internet-search']", /active|selected/i, timeoutMs);
+    return true;
+  } catch {
+    const toolsButton = page.locator(".ybc-atomSelect-tools,.ybc-atomSelect-tools-wrapper button").first();
+    if (await toolsButton.isVisible({ timeout: shortTimeout(timeoutMs, 3000) }).catch(() => false)) {
+      try {
+        await toolsButton.click({ timeout: shortTimeout(timeoutMs, 3000) });
+      } catch {
+        await toolsButton.click({ timeout: shortTimeout(timeoutMs, 3000), force: true });
+      }
+
+      const clicked = await clickTextOption(page, "联网搜索", {
+        selector: ".t-dropdown__item,[role='menuitem'],button,div,span",
+        timeoutMs: shortTimeout(timeoutMs, 4000)
+      }).catch(() => false);
+
+      if (clicked) {
+        await page.waitForTimeout(400);
+        return true;
+      }
+    }
+
+    if (await isYuanbaoInternetSearchLikelyEnabled(page)) {
+      return true;
+    }
+
+    throw new Error("未能开启腾讯元宝“联网搜索”。");
+  }
+}
+
 async function getYuanbaoFinalAnswerState(page) {
   return page.evaluate(() => {
     const cleanText = (value) =>
@@ -146,12 +195,10 @@ export const yuanbaoSite = {
     const modelState = await selectPreferredOption(
       page,
       {
-        currentSelectors: [".ybc-model-select-button", ".ybc-model-select-container"],
         triggerSelectors: [".ybc-model-select-button", ".ybc-model-select-container"],
-        labels: ["DeepSeek", "Hunyuan"],
+        labels: ["DeepSeek", "Hy3 preview", "Hunyuan", "元宝"],
         optionSelector: ".t-dropdown__item,[role='menuitem'],button,div",
-        required: true,
-        reopenOnMismatch: true
+        required: true
       },
       timeoutMs
     );
@@ -163,13 +210,7 @@ export const yuanbaoSite = {
       /selected|active/i,
       timeoutMs
     );
-    await ensureYuanbaoToggle(
-      page,
-      "联网搜索",
-      ".yb-internet-search-btn,[class*='internet-search']",
-      /active|selected/i,
-      timeoutMs
-    );
+    await ensureYuanbaoInternetSearch(page, timeoutMs);
 
     return {
       model: `${modelState.matched || modelState.selected || "DeepSeek"} / 深度思考 / 联网搜索`

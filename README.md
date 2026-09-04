@@ -2,6 +2,57 @@
 
 这套工作流是把“打开网页聊天工具 -> 输入提示词 -> 等待回答 -> 提取结果 -> 写入 Markdown 文件”做成可重复执行的命令行工具。
 
+## 5 分钟快速开始
+
+```bash
+npm install
+```
+
+1. 先检查根目录配置文件 `workflow.config.json`，确认 `outputDir` 是否是你本机可写目录。
+
+1. 首次使用先做登录态初始化（可先从一个站点开始）：
+
+```bash
+npm run setup:kimi
+```
+
+1. 跑一次单站点提问验证链路：
+
+```bash
+npm run ask:kimi -- --prompt "你好" --output-file hello.md
+```
+
+1. 再按配置文件跑多站点：
+
+```bash
+npm run ask:all -- --prompt "你好" --output-file hello.md
+```
+
+1. 需要批量执行时，直接使用任务文件：
+
+```bash
+npm run batch:all
+```
+
+## 快速导航
+
+- 新手先看：`5 分钟快速开始`
+- 配置说明：`编辑站点配置文件`
+- 单次提问：`单站点单次提问`、`按配置文件对全部站点单次提问`
+- 批量任务：`单站点批量执行`、`批量任务文件格式`
+- 稳定性与策略：`当前稳定性`、`新增站点的免费高级功能策略`
+- 故障排查：`失败处理`、`登录故障排查`
+
+## 推荐执行顺序（首次）
+
+1) `npm install`
+2) 修改 `workflow.config.json`：先确认 `outputDir` 是本机可写目录
+3) 先初始化 1 个站点登录态（建议 `kimi`）
+4) 执行 1 次单站点提问，确认输出文件能落盘
+5) 再开启 `ask:all` 或 `batch:all` 跑多站点任务
+
+这样做的目标是先把“配置可用 + 登录可用 + 输出可用”三件事逐一确认，避免一上来多站点并发排错。
+
 当前已内置这些站点适配：
 
 - `Kimi`
@@ -21,6 +72,8 @@
 默认配置会优先启用相对稳定的站点；当前示例配置里 `grok` 与 `perplexity` 默认关闭，避免一上来就因为 Cloudflare 或额外安全验证影响整批任务。
 
 默认提供了根目录配置文件 [workflow.config.json](workflow.config.json)，可以在里面控制哪些站点参与执行；当启用了多个站点时，可以用一条命令顺序执行所有已启用站点。
+
+> 注意：当前仓库里的 `workflow.config.json` 示例把 `outputDir` 指向了一个本机绝对路径。首次使用前建议改成你自己的目录，或直接改成相对路径 `output`。
 
 ## 工作流设计
 
@@ -42,10 +95,24 @@
 
 适合“准备一组提示词，批量导出多个 Markdown 文件”的场景。
 
-## 安装
+## 环境要求
+
+```bash
+node -v
+npm -v
+```
+
+- 建议 Node.js `18+`（或更高 LTS 版本）
+- 首次安装依赖：
 
 ```bash
 npm install
+```
+
+- 首次使用 Playwright 前，如果浏览器依赖不完整，可执行：
+
+```bash
+npx playwright install
 ```
 
 ## 常用命令
@@ -86,6 +153,22 @@ npm install
 ```
 
 `sites` 里的每一项也可以直接写成字符串站点 id，例如 `["kimi", "deepseek"]`；配置字段 `authFile` 也兼容 `auth_file` / `authPath` / `auth_path`。
+
+如果想统一指定输出根目录，可以在配置文件里加 `outputDir`：
+
+```json
+{
+  "outputDir": "output",
+  "sites": [
+    { "id": "kimi", "enabled": true },
+    { "id": "deepseek", "enabled": true }
+  ]
+}
+```
+
+任务里的 `outputFile` 只写文件名，不包含路径。最终输出路径固定为：`outputDir/{site}/outputFile`。
+
+如果未配置 `outputDir`，默认使用项目根目录下的 `output`，也就是：`output/{site}/outputFile`。
 
 ### 初始化单个站点登录态
 
@@ -140,46 +223,49 @@ npm run setup:all
 ### 单站点单次提问
 
 ```bash
-npm run ask:kimi -- --prompt "我想做一个俄罗斯方块游戏，请给出具体落地方案" --output output/kimi/tetris-plan.md
-npm run ask:deepseek -- --prompt "我想做一个俄罗斯方块游戏，请给出具体落地方案" --output output/deepseek/tetris-plan.md
-npm run ask:zai -- --prompt "我想做一个俄罗斯方块游戏，请给出具体落地方案" --output output/zai/tetris-plan.md
-npm run ask:qwen -- --prompt "你好" --output output/qwen/hello.md
-npm run ask:doubao -- --prompt "你好" --output output/doubao/hello.md
-npm run ask:metaso -- --prompt "你好" --output output/metaso/hello.md
-npm run ask:yiyan -- --prompt "你好" --output output/yiyan/hello.md
-npm run ask:yuanbao -- --prompt "你好" --output output/yuanbao/hello.md
-npm run ask:manus -- --prompt "你好" --output output/manus/hello.md
-npm run ask:grok -- --prompt "你好" --output output/grok/hello.md
-npm run ask:chatgpt -- --prompt "你好" --output output/chatgpt/hello.md
-npm run ask:gemini -- --prompt "你好" --output output/gemini/hello.md
-npm run ask:perplexity -- --prompt "你好" --output output/perplexity/hello.md
+npm run ask:kimi -- --prompt "我想做一个俄罗斯方块游戏，请给出具体落地方案" --output-file tetris-plan.md
+npm run ask:deepseek -- --prompt "我想做一个俄罗斯方块游戏，请给出具体落地方案" --output-file tetris-plan.md
+npm run ask:zai -- --prompt "我想做一个俄罗斯方块游戏，请给出具体落地方案" --output-file tetris-plan.md
+npm run ask:qwen -- --prompt "你好" --output-file hello.md
+npm run ask:doubao -- --prompt "你好" --output-file hello.md
+npm run ask:metaso -- --prompt "你好" --output-file hello.md
+npm run ask:yiyan -- --prompt "你好" --output-file hello.md
+npm run ask:yuanbao -- --prompt "你好" --output-file hello.md
+npm run ask:manus -- --prompt "你好" --output-file hello.md
+npm run ask:grok -- --prompt "你好" --output-file hello.md
+npm run ask:chatgpt -- --prompt "你好" --output-file hello.md
+npm run ask:gemini -- --prompt "你好" --output-file hello.md
+npm run ask:perplexity -- --prompt "你好" --output-file hello.md
 ```
 
 ### 按配置文件对全部站点单次提问
 
 ```bash
-npm run ask:all -- --prompt "我想做一个俄罗斯方块游戏，请给出具体落地方案" --output output/{site}/tetris-plan.md
+npm run ask:all -- --prompt "我想做一个俄罗斯方块游戏，请给出具体落地方案" --output-file tetris-plan.md
 ```
 
 也可以直接调用脚本；如果没有传 `--site`，脚本会优先读取根目录的 `workflow.config.json`：
 
 ```bash
-node scripts/web-chat-workflow.mjs run --prompt "你好" --output output/{site}/hello.md
+node scripts/web-chat-workflow.mjs run --prompt "你好" --output-file hello.md
+node scripts/web-chat-workflow.mjs run --prompt "你好" --output-file hello.md --output-dir output
 ```
 
 也可以直接用逗号分隔的 `--site` 临时指定多个站点，而不依赖配置文件：
 
 ```bash
-node scripts/web-chat-workflow.mjs run --site kimi,deepseek --prompt "你好" --output output/{site}/hello.md
+node scripts/web-chat-workflow.mjs run --site kimi,deepseek --prompt "你好" --output-file hello.md
 ```
 
 ### 从提示词文件提问
 
 ```bash
-npm run ask:kimi -- --prompt-file prompts/初步方案提示词.md --output output/kimi/初步方案.md
-npm run ask:deepseek -- --prompt-file prompts/初步方案提示词.md --output output/deepseek/初步方案.md
-npm run ask:zai -- --prompt-file prompts/初步方案提示词.md --output output/zai/初步方案.md
+npm run ask:kimi -- --prompt "请结合以下补充材料给出完整方案" --prompt-file prompts/初步方案提示词.md --output-file 初步方案.md
+npm run ask:deepseek -- --prompt "请结合以下补充材料给出完整方案" --prompt-file prompts/初步方案提示词.md --output-file 初步方案.md
+npm run ask:zai -- --prompt "请结合以下补充材料给出完整方案" --prompt-file prompts/初步方案提示词.md --output-file 初步方案.md
 ```
+
+这里 `prompt` 为必填；如果同时传了 `promptFile`，会读取文件内容并追加在 `prompt` 后面再发送。
 
 ### 单站点批量执行
 
@@ -217,7 +303,10 @@ node scripts/web-chat-workflow.mjs batch --site zai --tasks tasks/kimi-tasks.exa
 
 ```bash
 node scripts/web-chat-workflow.mjs batch --config workflow.config.json --tasks tasks/multi-site-tasks.example.json
+node scripts/web-chat-workflow.mjs batch --config workflow.config.json --tasks tasks/multi-site-tasks.example.json --output-dir output
 ```
+
+批量任务文件支持任务级输出目录覆盖（字段名 `outputDir` / `output_dir` / `输出目录` / `输出根目录`）。
 
 ### CSV 批量执行
 
@@ -279,6 +368,8 @@ DeepSeek 当前前端会把 `深度思考` 和 `智能搜索` 存在本地存储
   会尝试保持 `思考·自动`。
 - `豆包`
   会尝试切到 `思考` 模式。
+- `腾讯元宝`
+  会优先确保 `深度思考` 开启，并尝试在输入区 `工具` 菜单中找到并开启 `联网搜索`。
 
 ### 新增站点的免费高级功能策略
 
@@ -293,7 +384,7 @@ DeepSeek 当前前端会把 `深度思考` 和 `智能搜索` 存在本地存储
 - `文心一言`
   首页可见 `思考·自动 / 创意写作 / 阅读分析 / 网页工坊 / 智能翻译` 等能力；当前弹窗和提交流程还不够稳定，必要时建议在配置里关闭。
 - `腾讯元宝`
-  官方站点是 `https://yuanbao.tencent.com/`，聊天页会展示 DeepSeek 相关入口；当前更适合作为登录态站点使用。
+  官方站点是 `https://yuanbao.tencent.com/`，聊天页会展示 DeepSeek 相关入口；脚本会优先确保 `深度思考 + 联网搜索`（联网搜索入口位于 `工具` 菜单）；当前更适合作为登录态站点使用。
 - `Manus`
   官方站点是 `https://manus.im/`，首页可见输入区与 `Wide Research` 等能力；实测首页可免登录输入，但提交任务会跳转登录页，建议先 `setup:manus`。
 - `Grok`
@@ -337,26 +428,18 @@ DeepSeek 当前前端会把 `深度思考` 和 `智能搜索` 存在本地存储
 ### 给输出文件自动加时间戳
 
 ```bash
-npm run ask:kimi -- --prompt "请介绍一下中国历史" --output output/kimi/中国历史.md --timestamp-output
+npm run ask:kimi -- --prompt "请介绍一下中国历史" --output-file 中国历史.md --timestamp-output
 ```
 
-输出会变成类似 `output/kimi/中国历史-20260417-183000.md`。
+输出会变成类似 `output/kimi/中国历史-20260417-183000.md`（如果 `outputDir` 配置为默认值 `output`）。
 
 也可以在输出路径里显式写 `{timestamp}`：
 
 ```bash
-npm run ask:kimi -- --prompt "请介绍一下中国历史" --output output/kimi/{timestamp}-中国历史.md
+npm run ask:kimi -- --prompt "请介绍一下中国历史" --output-file {timestamp}-中国历史.md
 ```
 
-### 多站点输出占位符
-
-为了避免多站点执行时互相覆盖，推荐在输出路径里使用 `{site}`：
-
-```bash
-node scripts/web-chat-workflow.mjs run --config workflow.config.json --prompt "你好" --output output/{site}/hello.md
-```
-
-如果你一次执行多个站点，但输出路径里没有写 `{site}`，脚本会自动在文件名后追加站点后缀，例如 `answer-kimi.md`、`answer-deepseek.md`。
+输出路径中的 `{site}` 由脚本固定拼接，不需要在参数里手写。
 
 ### 失败自动重试
 
@@ -368,9 +451,78 @@ npm run batch:kimi -- --retries 2
 
 也可以在单个任务里配置 `retries` 字段覆盖全局设置。
 
+针对 `DeepSeek`，脚本额外启用了一个保护：如果抓取结果与本次 `prompt` 完全一致（常见于页面偶发选错节点），会自动判定为失败并走重试流程，不会直接写入错误内容到输出文档。
+
 ## 批量任务文件格式
 
-支持 JSON、CSV、XLSX、XLS。参考 [tasks/kimi-tasks.example.json](tasks/kimi-tasks.example.json) 或 [tasks/deepseek-tasks.example.json](tasks/deepseek-tasks.example.json)：
+支持 JSON、CSV、XLSX、XLS。建议优先使用 JSON（可读性最好，适合版本管理）。
+
+可参考示例文件：
+
+- [tasks/kimi-tasks.example.json](tasks/kimi-tasks.example.json)
+- [tasks/deepseek-tasks.example.json](tasks/deepseek-tasks.example.json)
+- [tasks/multi-site-tasks.example.json](tasks/multi-site-tasks.example.json)
+
+### package.json 批量命令逻辑（重要）
+
+`npm run batch:*` 本质是对 `node scripts/web-chat-workflow.mjs batch ...` 的封装。
+
+当前 `package.json` 的默认映射关系如下：
+
+- `batch:kimi` -> `--site kimi --tasks tasks/kimi-tasks.example.json`
+- `batch:deepseek` -> `--site deepseek --tasks tasks/deepseek-tasks.example.json`
+- `batch:zai` / `batch:qwen` / `batch:doubao` / `batch:metaso` / `batch:yiyan` / `batch:yuanbao` / `batch:manus` / `batch:grok` / `batch:chatgpt` / `batch:gemini` / `batch:perplexity` -> `--tasks tasks/multi-site-tasks.example.json`
+- `batch:all` -> `--config workflow.config.json --tasks tasks/multi-site-tasks.example.json`
+
+这意味着：
+
+- 示例任务文件路径是 npm 脚本的默认参数，不是批量核心逻辑写死。
+- 批量核心逻辑只要求提供 `--tasks`；你传什么文件就读取什么文件。
+
+### 如何自定义任务配置文件
+
+推荐把你自己的任务文件放在 `tasks/` 目录，例如 `tasks/my-kimi-tasks.json`、`tasks/my-multi-site-tasks.json`。
+
+方式 1：临时覆盖（推荐）
+
+```bash
+npm run batch:kimi -- --tasks tasks/my-kimi-tasks.json
+npm run batch:all -- --tasks tasks/my-multi-site-tasks.json
+```
+
+方式 2：长期固定（修改 package.json）
+
+把对应脚本里的 `--tasks tasks/*.example.json` 改成你自己的文件路径。
+
+方式 3：绕过 npm 脚本，直接调用主脚本
+
+```bash
+node scripts/web-chat-workflow.mjs batch --site kimi --tasks tasks/my-kimi-tasks.json
+node scripts/web-chat-workflow.mjs batch --config workflow.config.json --tasks tasks/my-multi-site-tasks.json
+```
+
+自定义后建议先做一次静态校验：
+
+```bash
+node scripts/web-chat-workflow.mjs validate --tasks tasks/my-kimi-tasks.json
+```
+
+### 最小可用模板（JSON）
+
+每个任务必须有 `outputFile` 与 `prompt`；`outputFile` 只能写文件名，不包含路径。`promptFile` 为可选，存在时会把文件内容追加在 `prompt` 后面。
+
+```json
+{
+  "tasks": [
+    {
+      "prompt": "请给出一个 7 天学习计划",
+      "outputFile": "7day-plan.md"
+    }
+  ]
+}
+```
+
+### 完整示例（JSON）
 
 ```json
 {
@@ -378,35 +530,62 @@ npm run batch:kimi -- --retries 2
     {
       "name": "贪吃蛇落地方案",
       "prompt": "我想做一个贪吃蛇游戏，请给出具体落地方案",
-      "output": "output/kimi/snake-plan.md",
-      "retries": 1
+      "outputFile": "snake-plan.md",
+      "retries": 1,
+      "timestamp": false
     },
     {
       "name": "中国历史介绍",
+      "prompt": "请基于补充材料介绍中国历史，并给出分阶段脉络",
       "promptFile": "prompts/介绍中国历史.md",
-      "output": "output/kimi/中国历史.md",
-      "timestamp": false
+      "outputFile": "中国历史.md",
+      "outputDir": "output/archive",
+      "retries": 2,
+      "timestamp": true
     }
   ]
 }
 ```
 
-CSV 和 Excel 使用同样的列名：
+### CSV / Excel 模板
+
+CSV 和 Excel 使用同样列名（Excel 默认读取第一张工作表）：
 
 ```csv
-name,prompt,promptFile,output,retries,timestamp
-贪吃蛇落地方案,"我想做一个贪吃蛇游戏，请给出具体落地方案",,output/kimi/snake-plan.md,1,false
-中国历史介绍,,prompts/介绍中国历史.md,output/kimi/中国历史.md,1,false
+name,prompt,promptFile,outputFile,outputDir,retries,timestamp
+贪吃蛇落地方案,"我想做一个贪吃蛇游戏，请给出具体落地方案",,snake-plan.md,,1,false
+中国历史介绍,"请基于补充材料介绍中国历史，并给出分阶段脉络",prompts/介绍中国历史.md,中国历史.md,output/archive,2,true
 ```
 
-字段说明：
+### 字段说明
 
-- `name`：任务名称，只用于日志展示，可选；也兼容 `title` / `taskname` / `任务名` / `名称`
-- `prompt`：直接写提示词；也兼容 `question` / `message` / `text` / `提示词` / `问题` / `提问内容`
-- `promptFile`：从本地 Markdown/TXT 文件读取提示词；也兼容 `prompt_file` / `promptpath` / `prompt_path` / `提示词文件` / `提示词路径`
-- `output`：回答保存路径，必填；也兼容 `outfile` / `outputpath` / `输出` / `输出文件` / `输出路径`
-- `retries`：失败后额外重试次数，可选；也兼容 `retry` / `重试次数` / `重试`
-- `timestamp`：是否给当前任务输出文件名加时间戳，可选；也兼容 `timestampOutput` / `timestamp_output` / `时间戳` / `加时间戳`
+- `name`：任务名称，仅用于日志展示，可选。兼容 `title` / `taskname` / `任务名` / `名称`
+- `prompt`：直接写提示词，必填。兼容 `question` / `message` / `text` / `提示词` / `问题` / `提问内容`
+- `outputFile`：回答输出文件名，必填，不能包含路径。兼容 `output_file` / `file` / `output` / `outfile` / `outputpath` / `输出文件名` / `输出文件` / `输出`
+- `outputDir`：任务级输出目录，可选。兼容 `output_dir` / `输出目录` / `输出根目录`
+- `promptFile`：从本地 Markdown/TXT 文件读取补充提示词，可选；有值时会把文件内容追加到 `prompt` 后。兼容 `prompt_file` / `promptpath` / `prompt_path` / `提示词文件` / `提示词路径`
+- `retries`：失败后额外重试次数，可选。兼容 `retry` / `重试次数` / `重试`
+- `timestamp`：是否给当前任务输出文件名加时间戳，可选。兼容 `timestampOutput` / `timestamp_output` / `时间戳` / `加时间戳`
+
+### 路径解析规则
+
+- 最终路径固定为：`outputDir/{site}/outputFile`。
+- `outputDir` 优先级：任务级 `outputDir` > 命令行 `--output-dir` > `workflow.config.json`。
+- 如果都没有配置 `outputDir`，默认使用项目根目录 `output`。
+- `outputFile` 只能是文件名，不能包含 `/` 或 `\`。
+
+### 常见错误
+
+- 漏填 `prompt`：任务校验会直接失败（`prompt` 为必填）。
+- `promptFile` 路径写错：文件不存在或编码异常导致读取失败。
+- `outputFile` 写成路径（如 `kimi/a.md`）：任务校验会失败。
+- 把 `retries` 写成非数字：重试逻辑不会按预期工作。
+
+可先用下面命令做静态校验，再正式执行：
+
+```bash
+node scripts/web-chat-workflow.mjs validate --tasks tasks/kimi-tasks.example.xlsx
+```
 
 ## 目录结构
 
@@ -468,6 +647,25 @@ workflow.config.json
 - 如果必须用 Google 登录，当前脚本的 Playwright 浏览器上下文不一定能通过 Google OAuth；普通 Chrome 登录也不会自动同步到 `.auth/*.json`。这种场景需要后续改成复用真实 Chrome 用户目录或手动导入 Cookie。
 - 对 `Perplexity / Grok / ChatGPT` 这类容易触发安全验证的站点，先单独运行对应的 `setup:*`，不要直接放进 `ask:all / batch:all`。
 - 如果某个站点在你的网络环境里反复触发验证，可以在 [workflow.config.json](workflow.config.json) 中把它暂时设为 `"enabled": false`。
+
+## 常见问题速查
+
+### 1) 任务成功了，但找不到输出文件
+
+- 先看 `workflow.config.json` 里的 `outputDir` 是否指向了其他目录（当前仓库示例是绝对路径）。
+- 如果命令里同时传了 `--output-dir`，以命令参数为准。
+- 实际写入目录固定是 `outputDir/{site}/`，文件名来自 `--output-file` 或任务里的 `outputFile`。
+
+### 2) 多站点执行时，只有部分站点成功
+
+- 这通常是登录态、风控校验、页面结构变更导致的站点级失败。
+- 建议先单独运行对应站点的 `setup:<site>` 和 `ask:<site>`，确认单站点稳定后再放回 `ask:all` / `batch:all`。
+
+### 3) `setup` 之后依然提示未登录
+
+- 检查 `.auth/<site>.json` 是否生成。
+- 某些站点存在多步验证，完成验证后请等待页面真正回到可聊天状态再结束 setup。
+- 如站点被风控拦截，建议先在配置中临时关闭该站点，确保主流程可用。
 
 ## 扩展方式
 

@@ -1,10 +1,11 @@
 {
   "tasks": [
     {
-      "name": "nihao",
-      "prompt": "你好",
-      "output": "output/deepseek/nihao.md",
-      "retries": 1,
+      "name": "三思",
+      "prompt": "我想做一个软件/工具，以下是具体想法，请分析一下商业可行性，技术可行性，市场竞争情况，并给出一个详细的实施方案。",
+      "promptFile": "prompts/三思.md",
+      "outputFile": "三思.md",
+      "retries": 2,
       "timestamp": true
     }
   ]
